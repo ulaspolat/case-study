@@ -11,7 +11,7 @@ This system allows users to filter hotel room images based on visual preferences
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone <https://github.com/ulaspolat/case-study>
 cd <repository-directory>
 ```
 
