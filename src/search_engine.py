@@ -138,33 +138,36 @@ class SearchEngine:
     def search(self, query, structured_data=None, method="combined", top_k=5):
         """
         Combined search method that integrates keyword and semantic approaches.
-        Can also use structured data from the query parser for better results.
         
         Args:
             query: Search query (string)
-            structured_data: Optional structured data from query parser
+            structured_data: Optional data from query parser (containing original_query and enhanced_query)
             method: Search method ('keyword', 'semantic', or 'combined')
             top_k: Number of top results to return
             
         Returns:
-            List of image URLs matching the query
+            List of tuples (image_id, score, method_name) for the top matching images
         """
-        # If structured_data is None, initialize it with just the original query
-        if structured_data is None:
-            structured_data = {"original_query": query}
+        # If structured_data is provided, use its enhanced_query field when available
+        if structured_data is not None:
+            if "enhanced_query" in structured_data:
+                query_text = structured_data["enhanced_query"]
+            elif "original_query" in structured_data:
+                query_text = structured_data["original_query"]
+            else:
+                query_text = query
+        else:
+            query_text = query
             
-        # Get the original query text
-        query_text = structured_data.get("original_query", query)
-        
-        # Get initial results using keyword and/or semantic search
+        # Get results using keyword and/or semantic search
         results = []
         
         if method in ["keyword", "combined"]:
-            keyword_results = self.keyword_search(query_text, top_k=top_k*2)  # Get more results for better filtering
+            keyword_results = self.keyword_search(query_text, top_k=top_k)
             results.extend([(img_id, score, "keyword") for img_id, score in keyword_results])
         
         if method in ["semantic", "combined"] and self.use_semantic_search:
-            semantic_results = self.semantic_search(query_text, top_k=top_k*2)  # Get more results for better filtering
+            semantic_results = self.semantic_search(query_text, top_k=top_k)
             results.extend([(img_id, score, "semantic") for img_id, score in semantic_results])
         
         # Deduplicate results, prioritizing higher scores
@@ -173,257 +176,14 @@ class SearchEngine:
             if img_id not in unique_results or score > unique_results[img_id][0]:
                 unique_results[img_id] = (score, method_name)
         
-        # Get all unique image IDs
-        image_ids = list(unique_results.keys())
+        # Convert to final output format
+        final_results = [(img_id, score, method_name) for img_id, (score, method_name) in unique_results.items()]
         
-        # Get descriptions for feature-based scoring
-        descriptions = self.get_descriptions(image_ids)
-        
-        # Extract key features from the query and calculate feature scores
-        feature_scores = self._calculate_feature_scores(query_text, descriptions)
-        
-        # If we have structured data, use it to enhance the feature scores
-        if len(structured_data) > 1:  # More than just the original query
-            structured_scores = self._calculate_structured_scores(structured_data, descriptions)
-            
-            # Combine feature scores with structured scores (giving more weight to structured scores)
-            for img_id in feature_scores:
-                if img_id in structured_scores:
-                    feature_scores[img_id] = feature_scores[img_id] * 0.4 + structured_scores[img_id] * 0.6
-        
-        # Combine base scores with feature scores
-        final_scores = []
-        for img_id, (base_score, method_name) in unique_results.items():
-            # Combine scores: 70% base score + 30% feature score
-            if img_id in feature_scores:
-                combined_score = base_score * 0.7 + feature_scores[img_id] * 0.3
-            else:
-                combined_score = base_score
-                
-            final_scores.append((img_id, combined_score, method_name))
-        
-        # Sort by combined score, descending
-        sorted_results = sorted(final_scores, key=lambda x: x[1], reverse=True)
+        # Sort by score, descending
+        sorted_results = sorted(final_results, key=lambda x: x[1], reverse=True)
         
         # Return top k results
         return sorted_results[:top_k]
-        
-    def _calculate_feature_scores(self, query, descriptions):
-        """
-        Calculate feature-based scores for each room based on query matching.
-        
-        Args:
-            query: Search query
-            descriptions: Dictionary of room descriptions
-            
-        Returns:
-            Dictionary mapping image IDs to feature scores
-        """
-        feature_scores = {}
-        
-        # Define key features to look for
-        key_features = [
-            "double", "single", "triple", "suite",  # Room types
-            "sea view", "city view", "garden view", "mountain view",  # View types
-            "balcony", "air conditioning", "desk", "tv", "minibar"  # Common features
-        ]
-        
-        # Lowercase query for case-insensitive matching
-        query_lower = query.lower()
-        
-        # Check for "and" constructs in the query
-        and_features = []
-        for i in range(len(key_features)):
-            for j in range(i+1, len(key_features)):
-                feature1, feature2 = key_features[i], key_features[j]
-                if f"{feature1} and {feature2}" in query_lower or f"{feature2} and {feature1}" in query_lower:
-                    and_features.append((feature1, feature2))
-        
-        # Calculate scores for each room
-        for img_id, desc_data in descriptions.items():
-            score = 0.0
-            matches = 0
-            total_checks = 0
-            
-            # Get the description text
-            desc_text = desc_data.get("description", "").lower()
-            
-            # Check for individual features
-            for feature in key_features:
-                if feature in query_lower:  # Only check features mentioned in the query
-                    total_checks += 1
-                    if feature in desc_text:
-                        matches += 1
-                        score += 1.0
-            
-            # Check for "and" constructs (both features must be present)
-            for feature1, feature2 in and_features:
-                total_checks += 1  # Count as one additional check
-                if feature1 in desc_text and feature2 in desc_text:
-                    matches += 1
-                    score += 2.0  # Give extra weight to matching "and" constructs
-            
-            # Normalize score
-            if total_checks > 0:
-                feature_scores[img_id] = score / total_checks
-            else:
-                feature_scores[img_id] = 0.5  # Neutral score if no features checked
-        
-        return feature_scores
-        
-    def _calculate_structured_scores(self, structured_data, descriptions):
-        """
-        Calculate scores based on structured data from the query parser.
-        This provides more precise matching than text-based feature matching.
-        
-        Args:
-            structured_data: Structured query data from the query parser
-            descriptions: Dictionary of room descriptions
-            
-        Returns:
-            Dictionary mapping image IDs to structured match scores
-        """
-        structured_scores = {}
-        
-        for img_id, desc_data in descriptions.items():
-            score = 0.0
-            fields_checked = 0
-            
-            # Check room type
-            if structured_data.get('room_type') and desc_data.get('room_type'):
-                fields_checked += 1
-                if structured_data['room_type'].lower() in desc_data['room_type'].lower():
-                    score += 1.0
-            
-            # Check min capacity
-            if structured_data.get('min_capacity') and desc_data.get('max_capacity'):
-                fields_checked += 1
-                query_min_capacity = structured_data['min_capacity']
-                desc_capacity = desc_data['max_capacity']
-                
-                # Try to convert to integers for comparison
-                try:
-                    if isinstance(query_min_capacity, str):
-                        query_min_capacity = int(''.join(filter(str.isdigit, query_min_capacity)))
-                    if isinstance(desc_capacity, str):
-                        desc_capacity = int(''.join(filter(str.isdigit, desc_capacity)))
-                    
-                    # Room must accommodate at least the minimum number of people
-                    if query_min_capacity <= desc_capacity:
-                        score += 1.0
-                except (ValueError, TypeError):
-                    # If conversion fails, do a string comparison
-                    if str(query_min_capacity) == str(desc_capacity):
-                        score += 1.0
-            
-            # Check max capacity
-            if structured_data.get('max_capacity') and desc_data.get('max_capacity'):
-                fields_checked += 1
-                query_max_capacity = structured_data['max_capacity']
-                desc_capacity = desc_data['max_capacity']
-                
-                # Try to convert to integers for comparison
-                try:
-                    if isinstance(query_max_capacity, str):
-                        query_max_capacity = int(''.join(filter(str.isdigit, query_max_capacity)))
-                    if isinstance(desc_capacity, str):
-                        desc_capacity = int(''.join(filter(str.isdigit, desc_capacity)))
-                    
-                    # Room should not exceed the maximum capacity
-                    if desc_capacity <= query_max_capacity:
-                        score += 1.0
-                except (ValueError, TypeError):
-                    # If conversion fails, do a string comparison
-                    if str(query_max_capacity) == str(desc_capacity):
-                        score += 1.0
-            
-            # Check view type
-            if structured_data.get('view_type') and desc_data.get('view_type'):
-                fields_checked += 1
-                if structured_data['view_type'].lower() in desc_data['view_type'].lower():
-                    score += 1.0
-            
-            # Check features (all must be present)
-            if structured_data.get('features') and desc_data.get('features'):
-                query_features = structured_data['features']
-                desc_features = desc_data.get('features', [])
-                desc_text = desc_data.get('description', '').lower()
-                
-                # Convert to list if needed
-                if isinstance(query_features, str):
-                    query_features = [query_features]
-                if isinstance(desc_features, str):
-                    desc_features = [desc_features]
-                
-                # For 'and' logic, all features must be present
-                fields_checked += 1
-                all_features_found = True
-                
-                for feature in query_features:
-                    feature_found = False
-                    # Check in features list
-                    for desc_feature in desc_features:
-                        if feature.lower() in desc_feature.lower():
-                            feature_found = True
-                            break
-                    
-                    # If not found in features list, check in description text
-                    if not feature_found and feature.lower() in desc_text:
-                        feature_found = True
-                    
-                    # If any feature is missing, the 'and' condition fails
-                    if not feature_found:
-                        all_features_found = False
-                        break
-                
-                # Only give a score if ALL features are found
-                if all_features_found:
-                    score += 1.0
-            
-            # Check other fields (room_size, bed_configuration, design_style, extra_amenities)
-            for field in ['room_size', 'bed_configuration', 'design_style']:
-                if structured_data.get(field) and desc_data.get(field):
-                    fields_checked += 1
-                    if structured_data[field].lower() in desc_data[field].lower():
-                        score += 1.0
-            
-            # Check extra amenities
-            if structured_data.get('extra_amenities') and desc_data.get('extra_amenities'):
-                query_amenities = structured_data['extra_amenities']
-                desc_amenities = desc_data.get('extra_amenities', [])
-                desc_text = desc_data.get('description', '').lower()
-                
-                # Convert to list if needed
-                if isinstance(query_amenities, str):
-                    query_amenities = [query_amenities]
-                if isinstance(desc_amenities, str):
-                    desc_amenities = [desc_amenities]
-                
-                # Check each amenity
-                for amenity in query_amenities:
-                    fields_checked += 1
-                    amenity_found = False
-                    
-                    # Check in amenities list
-                    for desc_amenity in desc_amenities:
-                        if amenity.lower() in desc_amenity.lower():
-                            amenity_found = True
-                            break
-                    
-                    # If not found in amenities list, check in description text
-                    if not amenity_found and amenity.lower() in desc_text:
-                        amenity_found = True
-                    
-                    if amenity_found:
-                        score += 1.0
-            
-            # Normalize score
-            if fields_checked > 0:
-                structured_scores[img_id] = score / fields_checked
-            else:
-                structured_scores[img_id] = 0.5  # Neutral score if no fields checked
-        
-        return structured_scores
     
     def get_image_urls(self, image_ids):
         """

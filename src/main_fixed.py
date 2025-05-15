@@ -59,8 +59,8 @@ def main():
         if QueryParserAgent.should_use_llm(args.query):
             print("Query is complex - using LLM parser...")
             structured_data = query_parser.parse_structured_query(args.query)
-            print("Structured query:")
-            print(json.dumps(structured_data, indent=2))
+            if "enhanced_query" in structured_data:
+                print(f"Enhanced query: {structured_data['enhanced_query']}")
             
             # Use the search engine with structured data
             results = search_engine.search(query=args.query, structured_data=structured_data, 
@@ -142,8 +142,8 @@ def run_interactive_mode(search_engine, query_parser, top_k=5, method="combined"
         if QueryParserAgent.should_use_llm(query):
             print("Query is complex - using LLM parser...")
             structured_data = query_parser.parse_structured_query(query)
-            print("Structured query:")
-            print(json.dumps(structured_data, indent=2))
+            if "enhanced_query" in structured_data:
+                print(f"Enhanced query: {structured_data['enhanced_query']}")
             
             # Use the search engine with structured data
             results = search_engine.search(query=query, structured_data=structured_data, 
@@ -203,8 +203,8 @@ def run_case_study_queries(search_engine, query_parser, top_k=5, method="combine
         if QueryParserAgent.should_use_llm(query):
             print("Query is complex - using LLM parser...")
             structured_data = query_parser.parse_structured_query(query)
-            print("Structured query:")
-            print(json.dumps(structured_data, indent=2))
+            if "enhanced_query" in structured_data:
+                print(f"Enhanced query: {structured_data['enhanced_query']}")
             
             # Use the search engine with structured data
             results = search_engine.search(query=query, structured_data=structured_data, 

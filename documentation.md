@@ -9,8 +9,8 @@ This system allows users to search for hotel rooms based on visual features and 
 The system consists of three main components:
 
 1. **Image Analyzer**: Downloads hotel room images from URLs, processes them using OpenAI's GPT-4.1-mini to extract structured JSON data about room features
-2. **Query Parser Agent**: Parses complex natural language queries into structured data for better search results
-3. **Search Engine**: Performs keyword and semantic search with feature-based scoring to find relevant hotel rooms
+2. **Query Parser Agent**: Enhances natural language queries to optimize them for better keyword and semantic search performance
+3. **Search Engine**: Performs keyword and semantic search to find relevant hotel rooms based on the enhanced queries
 
 ### Architecture Diagram
 
@@ -90,26 +90,27 @@ The Image Analyzer includes comprehensive error handling:
 
 ### 2. Query Parser Agent
 
-The Query Parser Agent is responsible for parsing complex natural language queries into structured data:
+The Query Parser Agent enhances natural language queries for better search performance:
 
-1. **Structured Query Parsing**:
-   - Converts natural language queries into structured JSON format
-   - Extracts specific room features, requirements, and preferences
-   - Uses LLM capabilities to understand complex or ambiguous queries
+1. **Query Enhancement**:
+   - Optimizes natural language queries for better keyword and semantic search
+   - Identifies key search terms related to hotel room features
+   - Removes filler words and adds relevant synonyms where helpful
+   - Structures queries to emphasize important search terms
 
 2. **Cost Optimization**:
    - Uses the `should_use_llm` method to determine if a query is complex enough to warrant LLM processing
    - Simple queries bypass the LLM to reduce API costs
-   - Complex queries benefit from structured parsing for better search accuracy
+   - Complex queries benefit from enhancement for better search accuracy
 
-3. **Feature Extraction**:
-   - Identifies logical operators (e.g., "and", "or") in queries
-   - Extracts specific room types, capacities, views, and amenities
-   - Maintains the original query for fallback keyword searching
+3. **Output Format**:
+   - Returns both the original query and the enhanced query
+   - Preserves all important constraints and requirements from the original query
+   - Makes the query more effective for keyword and semantic search engines
 
 ### 3. Search Engine
 
-The Search Engine combines multiple search approaches with optimized processing:
+The Search Engine uses two primary search approaches:
 
 1. **Keyword-Based Search**:
    - Uses TF-IDF (Term Frequency-Inverse Document Frequency) to match keywords in descriptions
@@ -119,15 +120,10 @@ The Search Engine combines multiple search approaches with optimized processing:
    - Uses a sentence transformer model (all-mpnet-base-v2) for semantic understanding
    - Creates embeddings of descriptions and queries for meaning-based matching
 
-3. **Feature-Based Scoring**:
-   - Implements strict "and" logic for feature matching
-   - Rooms must have ALL required features to be ranked highly
-   - Gives extra weight to matches with multiple required features
-
-4. **Structured Data Scoring**:
-   - Uses structured data from the Query Parser to perform precise matching
-   - Combines base scores (70%) with feature scores (30%) for optimal ranking
-   - Prioritizes rooms that meet all specified criteria
+3. **Combined Search**:
+   - Integrates results from both keyword and semantic search
+   - Deduplicates results, prioritizing higher scores
+   - Returns a combined, ranked list of results
 
 ### 4. Main Application
 
@@ -152,14 +148,13 @@ Coordinates the overall workflow:
    - User submits a natural language query
    - The Query Parser Agent evaluates query complexity
    - Simple queries bypass the LLM parser
-   - Complex queries are parsed into structured JSON data
-   - Structured data is passed to the Search Engine
+   - Complex queries are enhanced for better search performance
+   - Enhanced query is passed to the Search Engine
 
 3. **Search Flow**:
-   - The Search Engine processes the query and structured data
+   - The Search Engine processes the enhanced query
    - Both keyword and semantic search methods are applied
-   - Feature-based scoring is performed using structured data
-   - Results are combined with appropriate weighting
+   - Results are combined from both search methods
    - Matching image URLs are returned, ranked by relevance
 
 ## Technology Stack
@@ -194,48 +189,43 @@ Coordinates the overall workflow:
    - Failed API calls are retried with exponential backoff
    - Progress is saved incrementally to allow resuming processing
 
-### Query Parsing Process
+### Query Enhancement Process
 
 1. **Complexity Assessment**:
    - Query is analyzed to determine complexity
    - Checks for specific phrases that indicate complexity
    - Counts requirement indicators to assess query sophistication
-   - Determines if LLM parsing is necessary
+   - Determines if LLM enhancement is necessary
 
-2. **Structured Parsing**:
+2. **Query Optimization**:
    - Complex queries are sent to the OpenAI API
-   - System prompt guides the model to extract structured information
-   - Response is parsed into a standardized JSON format
-   - Structured data includes room type, capacity, view type, features, etc.
+   - System prompt guides the model to enhance the query for better search
+   - Identifies key search terms and removes filler words
+   - Preserves all important constraints from the original query
+   - Returns both original and enhanced queries
 
 3. **Fallback Handling**:
-   - If structured parsing fails, falls back to basic keyword search
-   - Preserves original query for search engine processing
+   - If enhancement fails, falls back to the original query
    - Handles API errors gracefully
+   - Ensures search can proceed even if enhancement fails
 
 ### Search Process
 
 1. **Keyword Search**:
-   - User query is converted to a TF-IDF vector
+   - Enhanced query is converted to a TF-IDF vector
    - Cosine similarity is calculated between the query vector and all description vectors
    - Images with the highest similarity are returned
 
 2. **Semantic Search**:
-   - User query is encoded into an embedding vector using the transformer model
+   - Enhanced query is encoded into an embedding vector using the transformer model
    - Cosine similarity is calculated between the query embedding and all description embeddings
    - Images with the highest semantic similarity are returned
 
-3. **Feature-Based Scoring**:
-   - Extracts key features from the query
-   - Checks for "and" constructs requiring multiple features
-   - Applies strict matching for logical operators
-   - Normalizes scores based on feature matches
-
-4. **Structured Data Scoring**:
-   - Uses structured data from the Query Parser
-   - Performs precise matching on room types, capacities, views, etc.
-   - Implements strict "and" logic for features
-   - Combines with base scores for final ranking
+3. **Result Combination**:
+   - Results from both search methods are combined
+   - Duplicate results are removed, keeping the highest score
+   - Final results are sorted by score
+   - Top results are returned to the user
 
 ## Cost Optimization
 
@@ -249,12 +239,12 @@ The system has been optimized for cost efficiency:
    - Lower detail parameter for vision analysis
    - Reduced token generation limits
    - Efficient retries to minimize unnecessary API calls
-   - LLM query parser only used for complex queries
+   - LLM query enhancement only used for complex queries
 
 3. **Query Complexity Analysis**:
    - Simple queries bypass the LLM parser completely
    - Complexity is determined by query length and specific phrases
-   - Multiple requirements trigger LLM parsing for better results
+   - Multiple requirements trigger LLM enhancement for better results
    - Optimizes cost without sacrificing search quality
 
 4. **Performance Optimization**:

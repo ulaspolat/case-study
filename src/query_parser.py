@@ -1,8 +1,8 @@
 """
 Query Parser Agent for Hotel Room Search System
 
-This module provides an LLM-based agent that can parse natural language queries
-into structured search parameters for more accurate hotel room searches.
+This module provides an LLM-based agent that can enhance natural language queries
+for better performance in keyword and semantic search.
 """
 
 import os
@@ -15,9 +15,9 @@ load_dotenv()
 
 class QueryParserAgent:
     """
-    An LLM-based agent that parses natural language queries into structured search parameters.
-    This agent can handle complex, varied, and natural language queries and extract structured
-    information even from ambiguous or unusual phrasing.
+    An LLM-based agent that enhances natural language queries for better search performance.
+    This agent can improve ambiguous or complex queries to make them more effective for 
+    keyword and semantic search engines.
     """
     
     def __init__(self, api_key=None):
@@ -33,51 +33,40 @@ class QueryParserAgent:
     
     def parse_query(self, query_text):
         """
-        Parse a natural language query into structured search parameters.
+        Enhance a natural language query for better search performance.
         
         Args:
             query_text: Natural language query from the user
             
         Returns:
-            Dictionary containing structured search parameters
+            Dictionary containing original and enhanced queries
         """
         try:
-            # Prepare the system prompt for query parsing
+            # Prepare the system prompt for query enhancement
             system_prompt = """
-            You are a hotel room search query parser. Your task is to extract structured information from natural language queries
-            about hotel rooms. Parse the user's query and extract the following information in JSON format:
+            You are a hotel room search query optimizer. Your task is to enhance and optimize natural language queries 
+            about hotel rooms to improve keyword and semantic search performance.
             
+            For the given user query:
+            1. Identify key search terms related to hotel rooms (room types, views, amenities, etc.)
+            2. Remove filler words and unnecessary language
+            3. Add relevant synonyms for key terms where helpful
+            4. Structure the query in a way that emphasizes important search terms
+            5. Preserve ALL important constraints and requirements from the original query
+            
+            Return your response in JSON format with these fields:
             {
-                "room_type": null or string (e.g., "single", "double", "triple", "suite"),
-                "min_capacity": null or integer (minimum number of people the room must accommodate),
-                "max_capacity": null or integer (maximum number of people the room should accommodate),
-                "view_type": null or string (e.g., "sea", "garden", "city", "mountain"),
-                "features": [] or list of strings (e.g., ["desk", "balcony", "air conditioning"]),
-                "room_size": null or string (e.g., "small", "medium", "large"),
-                "bed_configuration": null or string (e.g., "single beds", "double bed", "king size"),
-                "design_style": null or string (e.g., "modern", "classic", "minimalist"),
-                "extra_amenities": [] or list of strings (e.g., ["TV", "minibar", "coffee machine"]),
-                "original_query": the original query text
+                "original_query": "the exact original query",
+                "enhanced_query": "the optimized query for better search performance"
             }
             
             Important guidelines:
-            1. Capacity interpretation:
-               - When a query mentions "suitable for X people" or "family of X", set min_capacity to X
-               - When a query mentions "maximum of X people" or "up to X people", set max_capacity to X
-               - For room types, infer capacity: single=1, double=2, triple=3, family=3+, suite=2+
+            - Ensure the enhanced query maintains ALL the requirements from the original query
+            - Focus on making the query more effective for keyword and semantic search
+            - Do not add requirements that weren't in the original query
+            - Do not omit any important search criteria from the original query
+            - Use clear, concise language that captures the semantic meaning
             
-            2. Logical operators:
-               - Pay careful attention to logical operators like "and" and "or" in the query
-               - When features are connected with "and" (e.g., "balcony and air conditioning"), include both in the features list
-               - Make sure to include ALL required features mentioned in the query
-               - The system will enforce strict "and" logic, requiring ALL features to be present
-            
-            3. Be precise and thorough:
-               - Extract all relevant information from the query
-               - Don't omit any features or requirements mentioned in the query
-               - Be specific with feature names (e.g., "air conditioning" not just "air")
-            
-            Only include fields that are explicitly mentioned or strongly implied in the query. Use null for fields that are not mentioned.
             Your response must be valid JSON that can be parsed directly.
             """
             
@@ -88,7 +77,7 @@ class QueryParserAgent:
             }
             
             payload = {
-                "model": "gpt-4.1-mini",
+                "model": "gpt-4.1-mini",  
                 "messages": [
                     {
                         "role": "system",
@@ -126,16 +115,21 @@ class QueryParserAgent:
                                 json_content = json_content.split('```')[0]
                                 
                             # Parse the JSON content
-                            structured_query = json.loads(json_content.strip())
+                            enhanced_query = json.loads(json_content.strip())
                             
-                            # Add the original query
-                            structured_query['original_query'] = query_text
-                            
-                            return structured_query
+                            # Ensure original_query is present
+                            if "original_query" not in enhanced_query:
+                                enhanced_query["original_query"] = query_text
+                                
+                            # Make sure enhanced_query field exists
+                            if "enhanced_query" not in enhanced_query:
+                                enhanced_query["enhanced_query"] = query_text
+                                
+                            return enhanced_query
                         except json.JSONDecodeError as e:
                             print(f"Error parsing JSON response: {e}")
                             # Fallback to returning a basic structure with the original query
-                            return {"original_query": query_text}
+                            return {"original_query": query_text, "enhanced_query": query_text}
                     elif response.status_code == 429 or response.status_code >= 500:
                         # Rate limit or server error, retry after delay
                         import time
@@ -157,35 +151,35 @@ class QueryParserAgent:
                         raise
             
             # If we get here, all retries failed
-            return {"original_query": query_text, "error": "Failed to parse query after multiple attempts"}
+            return {"original_query": query_text, "enhanced_query": query_text, "error": "Failed to enhance query after multiple attempts"}
             
         except Exception as e:
-            print(f"Error parsing query: {str(e)}")
-            return {"original_query": query_text, "error": str(e)}
+            print(f"Error enhancing query: {str(e)}")
+            return {"original_query": query_text, "enhanced_query": query_text, "error": str(e)}
     
     def parse_structured_query(self, query_text):
         """
-        Parse a natural language query and return structured data that can be used by the search engine.
+        Enhance a natural language query for better search performance.
         This is the main interface method that should be called by other components.
         
         Args:
             query_text: Natural language query from the user
             
         Returns:
-            Dictionary containing the original query and structured data if parsing was successful
+            Dictionary containing the original query and enhanced query if enhancement was successful
         """
-        # Only parse complex queries
+        # Only enhance complex queries
         if not self.should_use_llm(query_text):
-            return {"original_query": query_text}
+            return {"original_query": query_text, "enhanced_query": query_text}
             
-        # Parse the query to get structured information
+        # Enhance the query
         try:
-            structured_query = self.parse_query(query_text)
-            print(f"Structured query: {json.dumps(structured_query, indent=2)}")
-            return structured_query
+            enhanced_query = self.parse_query(query_text)
+            print(f"Enhanced query: {enhanced_query['enhanced_query']}")
+            return enhanced_query
         except Exception as e:
-            print(f"Error parsing query: {str(e)}")
-            return {"original_query": query_text}
+            print(f"Error enhancing query: {str(e)}")
+            return {"original_query": query_text, "enhanced_query": query_text}
     
     @staticmethod
     def should_use_llm(query_text):
@@ -223,157 +217,6 @@ class QueryParserAgent:
                 requirement_count += 1
                 
         return requirement_count >= 2  # Multiple requirements suggest complexity
-    
-    def _calculate_match_score(self, structured_query, description_data):
-        """
-        Calculate a match score based on how well the description matches the structured query.
-        
-        Args:
-            structured_query: Structured query parameters
-            description_data: Description data for an image
-            
-        Returns:
-            Match score between 0 and 1
-        """
-        # Initialize score and count of matching fields
-        score = 0
-        fields_checked = 0
-        
-        # Check room type
-        if structured_query.get('room_type') and description_data.get('room_type'):
-            fields_checked += 1
-            if structured_query['room_type'].lower() in description_data['room_type'].lower():
-                score += 1
-        
-        # Check min capacity
-        if structured_query.get('min_capacity') and description_data.get('max_capacity'):
-            fields_checked += 1
-            query_min_capacity = structured_query['min_capacity']
-            desc_capacity = description_data['max_capacity']
-            
-            # Try to convert to integers for comparison
-            try:
-                if isinstance(query_min_capacity, str):
-                    query_min_capacity = int(''.join(filter(str.isdigit, query_min_capacity)))
-                if isinstance(desc_capacity, str):
-                    desc_capacity = int(''.join(filter(str.isdigit, desc_capacity)))
-                
-                # Room must accommodate at least the minimum number of people
-                if query_min_capacity <= desc_capacity:
-                    score += 1
-            except (ValueError, TypeError):
-                # If conversion fails, do a string comparison
-                if str(query_min_capacity) == str(desc_capacity):
-                    score += 1
-        
-        # Check max capacity
-        if structured_query.get('max_capacity') and description_data.get('max_capacity'):
-            fields_checked += 1
-            query_max_capacity = structured_query['max_capacity']
-            desc_capacity = description_data['max_capacity']
-            
-            # Try to convert to integers for comparison
-            try:
-                if isinstance(query_max_capacity, str):
-                    query_max_capacity = int(''.join(filter(str.isdigit, query_max_capacity)))
-                if isinstance(desc_capacity, str):
-                    desc_capacity = int(''.join(filter(str.isdigit, desc_capacity)))
-                
-                # Room should not exceed the maximum capacity
-                if desc_capacity <= query_max_capacity:
-                    score += 1
-            except (ValueError, TypeError):
-                # If conversion fails, do a string comparison
-                if str(query_max_capacity) == str(desc_capacity):
-                    score += 1
-        
-        # Check view type
-        if structured_query.get('view_type') and description_data.get('view_type'):
-            fields_checked += 1
-            if structured_query['view_type'].lower() in description_data['view_type'].lower():
-                score += 1
-        
-        # Check features
-        if structured_query.get('features') and description_data.get('features'):
-            query_features = structured_query['features']
-            desc_features = description_data['features']
-            
-            # Convert to list if needed
-            if isinstance(query_features, str):
-                query_features = [query_features]
-            if isinstance(desc_features, str):
-                desc_features = [desc_features]
-            
-            # For 'and' logic, all features must be present
-            # We'll count this as a single field check with a binary score (all or nothing)
-            fields_checked += 1
-            
-            # Track if all features are found
-            all_features_found = True
-            
-            # Check each feature
-            for feature in query_features:
-                feature_found = False
-                for desc_feature in desc_features:
-                    if feature.lower() in desc_feature.lower():
-                        feature_found = True
-                        break
-                
-                # If any feature is missing, the 'and' condition fails
-                if not feature_found:
-                    all_features_found = False
-                    break
-            
-            # Only give a score if ALL features are found (strict 'and' logic)
-            if all_features_found:
-                score += 1
-        
-        # Check room size
-        if structured_query.get('room_size') and description_data.get('room_size'):
-            fields_checked += 1
-            if structured_query['room_size'].lower() in description_data['room_size'].lower():
-                score += 1
-        
-        # Check bed configuration
-        if structured_query.get('bed_configuration') and description_data.get('bed_configuration'):
-            fields_checked += 1
-            if structured_query['bed_configuration'].lower() in description_data['bed_configuration'].lower():
-                score += 1
-        
-        # Check design style
-        if structured_query.get('design_style') and description_data.get('design_style'):
-            fields_checked += 1
-            if structured_query['design_style'].lower() in description_data['design_style'].lower():
-                score += 1
-        
-        # Check extra amenities
-        if structured_query.get('extra_amenities') and description_data.get('extra_amenities'):
-            query_amenities = structured_query['extra_amenities']
-            desc_amenities = description_data['extra_amenities']
-            
-            # Convert to list if needed
-            if isinstance(query_amenities, str):
-                query_amenities = [query_amenities]
-            if isinstance(desc_amenities, str):
-                desc_amenities = [desc_amenities]
-            
-            # Check each amenity
-            for amenity in query_amenities:
-                fields_checked += 1
-                amenity_found = False
-                for desc_amenity in desc_amenities:
-                    if amenity.lower() in desc_amenity.lower():
-                        amenity_found = True
-                        break
-                
-                if amenity_found:
-                    score += 1
-        
-        # Calculate final score
-        if fields_checked > 0:
-            return score / fields_checked
-        else:
-            return 0.5  # Neutral score if no fields were checked
 
 
 # Example usage if this file is run directly
@@ -392,9 +235,9 @@ if __name__ == "__main__":
         ]
         
         for query in test_queries:
-            print(f"\nParsing query: {query}")
+            print(f"\nOriginal query: {query}")
             result = parser.parse_query(query)
-            print(json.dumps(result, indent=2))
+            print(f"Enhanced query: {result['enhanced_query']}")
     
     except Exception as e:
         print(f"Error: {str(e)}")

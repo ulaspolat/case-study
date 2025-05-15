@@ -1,17 +1,12 @@
 # Hotel Room Image Search System
 
-This system allows users to filter hotel room images based on visual preferences by performing advanced searches through image descriptions. It downloads hotel room images from URLs, analyzes them using AI, and allows searching based on room features with optimized query parsing and feature matching.
-
-## Requirements
-
-- Python 3.10+
-- OpenAI API Key
+This system allows users to filter hotel room images based on visual preferences by performing advanced searches through image descriptions. It downloads hotel room images from URLs, analyzes them using AI, and allows searching based on room features with optimized query enhancement and efficient keyword/semantic search.
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone <https://github.com/ulaspolat/case-study>
 cd <repository-directory>
 ```
 
@@ -102,8 +97,8 @@ python src/main_fixed.py --query "Double rooms with a sea view" --method semanti
 The system consists of three main components:
 
 1. **Image Analyzer**: Downloads hotel room images from URLs, processes them using OpenAI's GPT-4.1-mini to extract structured JSON data about room features
-2. **Query Parser Agent**: Parses complex natural language queries into structured data for better search results
-3. **Search Engine**: Performs keyword and semantic search with feature-based scoring to find relevant hotel rooms
+2. **Query Parser Agent**: Enhances natural language queries to optimize them for better keyword and semantic search performance
+3. **Search Engine**: Performs keyword and semantic search to find relevant hotel rooms based on the enhanced queries
 4. **Main Application**: Coordinates the image download, analysis and search processes
 
 ## License
