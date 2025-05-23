@@ -12,3 +12,4 @@ huggingface-hub==0.14.1
 torch==2.0.1
 pathlib==1.0.1
 urllib3==2.0.7
+faiss-cpu==1.11.0

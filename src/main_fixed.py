@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--desc_dir", type=str, default="descriptions", help="Directory to load descriptions from")
     parser.add_argument("--images_dir", type=str, default="images", help="Directory to store downloaded images")
     parser.add_argument("--urls_file", type=str, default="data/hotel_images.json", help="JSON file containing image URLs")
+    parser.add_argument("--vector_db_dir", type=str, default="vector_db", help="Directory to store vector database files")
     parser.add_argument("--process_images", action="store_true", help="Download and process images before search")
     parser.add_argument("--query", type=str, help="Run a specific search query")
     parser.add_argument("--run_case_study", action="store_true", help="Run all case study queries")
@@ -42,7 +43,7 @@ def main():
     # Initialize search engine without API key
     print("Initializing search engine...")
     start_time = time.time()
-    search_engine = SearchEngine(descriptions_dir=args.desc_dir)
+    search_engine = SearchEngine(descriptions_dir=args.desc_dir, vector_db_dir=args.vector_db_dir)
     end_time = time.time()
     print(f"Search engine initialized in {end_time - start_time:.2f} seconds.")
     
@@ -108,6 +109,7 @@ def run_interactive_mode(search_engine, query_parser, top_k=5, method="combined"
     print("=" * 50)
     print("\nEnter 'exit', 'quit', or 'q' to exit the program.")
     print("Enter 'examples' to see example queries.")
+    print("Enter 'stats' to see query statistics.")
     
     case_study_queries = [
         "Double rooms with a sea view",
@@ -128,6 +130,14 @@ def run_interactive_mode(search_engine, query_parser, top_k=5, method="combined"
             print("\nExample queries:")
             for i, example in enumerate(case_study_queries, 1):
                 print(f"{i}. {example}")
+            continue
+        
+        if query.lower() == "stats":
+            stats = search_engine.get_query_statistics()
+            print("\nQuery Statistics:")
+            print(f"Total queries processed: {stats['total_queries']}")
+            print(f"Unique queries: {stats['unique_queries']}")
+            print(f"Cached queries: {stats['cached_queries']}")
             continue
         
         if not query:
@@ -156,6 +166,13 @@ def run_interactive_mode(search_engine, query_parser, top_k=5, method="combined"
         
         print(f"Query processed in {end_time - start_time:.2f} seconds.")
         print_search_results(results, search_engine)
+        
+        # Show similar query suggestions
+        similar_queries = search_engine.suggest_similar_queries(query)
+        if similar_queries:
+            print("\nSimilar queries you might be interested in:")
+            for i, (similar_query, score) in enumerate(similar_queries, 1):
+                print(f"{i}. {similar_query} (similarity: {score:.2f})")
 
 def print_search_results(results, search_engine):
     """Print formatted search results."""

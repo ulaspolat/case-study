@@ -6,11 +6,13 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 import torch
 from sentence_transformers import SentenceTransformer
+import time
 
-# Try to import SentenceTransformer from the latest version
+# New import for vector database
+from vector_db import VectorDB
 
 class SearchEngine:
-    def __init__(self, descriptions_dir="descriptions"):
+    def __init__(self, descriptions_dir="descriptions", vector_db_dir="vector_db"):
         """Initialize the search engine with description data."""
         # Load descriptions
         self.descriptions_dir = Path(descriptions_dir)
@@ -26,6 +28,9 @@ class SearchEngine:
             print(f"Warning: Could not initialize sentence transformer: {e}")
             print("Semantic search will be disabled")
             self.use_semantic_search = False
+        
+        # Initialize vector database
+        self.vector_db = VectorDB(vector_db_dir)
         
         # Prepare data for searching
         self.prepare_search_data()
@@ -77,11 +82,22 @@ class SearchEngine:
         self.tfidf_vectorizer = TfidfVectorizer(stop_words='english')
         self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(self.documents)
         
-        # Create embeddings for semantic search (cache them to avoid recomputing)
+        # Create embeddings for semantic search and initialize vector database
         if self.use_semantic_search:
-            print("Generating sentence embeddings... (this may take a moment)")
-            self.embeddings = self.sentence_model.encode(self.documents, show_progress_bar=True)
-            print("Sentence embeddings generated successfully!")
+            # Check if the index already exists in the vector database
+            if self.vector_db.index is None:
+                print("Generating sentence embeddings for vector database... (this may take a moment)")
+                start_time = time.time()
+                self.embeddings = self.sentence_model.encode(self.documents, show_progress_bar=True)
+                
+                # Build and save the vector database index
+                self.vector_db.build_index(self.embeddings, self.document_ids)
+                end_time = time.time()
+                print(f"Sentence embeddings generated and indexed in {end_time - start_time:.2f} seconds!")
+            else:
+                print("Using existing vector database index")
+                # Keep the embeddings in memory for traditional search comparison
+                self.embeddings = self.sentence_model.encode(self.documents, show_progress_bar=False)
     
     def keyword_search(self, query, top_k=5):
         """
@@ -121,19 +137,62 @@ class SearchEngine:
             print("Semantic search is disabled. Using keyword search instead.")
             return self.keyword_search(query, top_k)
         
-        # Encode the query using our local sentence transformer model
+        # Check if we have cached results for this query
+        cached_results = self.vector_db.get_cached_results(query)
+        if cached_results:
+            print("Using cached semantic search results")
+            return cached_results
+        
+        # Encode the query using our sentence transformer model
+        start_time = time.time()
         query_embedding = self.sentence_model.encode(query)
         
-        # Calculate cosine similarity
-        similarity = np.dot(self.embeddings, query_embedding) / (
-            np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(query_embedding)
-        )
+        # Use vector database for similarity search
+        results = self.vector_db.search(query_embedding, top_k=top_k)
+        end_time = time.time()
+        print(f"Vector database search completed in {end_time - start_time:.4f} seconds")
         
-        # Sort by similarity score
-        top_indices = similarity.argsort()[::-1][:top_k]
+        # Store the query embedding in the query vector database for future recommendations
+        self.vector_db.add_query_to_index(query, query_embedding)
         
-        # Return top matching images
-        return [(self.document_ids[i], float(similarity[i])) for i in top_indices if similarity[i] > 0.5]
+        # Cache the results for future use
+        self.vector_db.cache_query(query, results)
+        
+        # Filter results by similarity threshold
+        return [(img_id, score) for img_id, score in results if score > 0.5]
+    
+    def suggest_similar_queries(self, query, top_k=3):
+        """
+        Suggest similar queries based on the query vector database.
+        
+        Args:
+            query: Current query
+            top_k: Number of suggestions to return
+            
+        Returns:
+            List of tuples (query_text, similarity_score)
+        """
+        if not self.use_semantic_search:
+            return []
+        
+        # Encode the query
+        query_embedding = self.sentence_model.encode(query)
+        
+        # Find similar queries
+        similar_queries = self.vector_db.find_similar_queries(query_embedding, top_k=top_k)
+        
+        # Filter out the exact same query and ensure minimum similarity
+        return [(q, score) for q, score in similar_queries 
+                if q != query and score > 0.7]
+    
+    def get_query_statistics(self):
+        """
+        Get statistics about the queries processed by the system.
+        
+        Returns:
+            Dictionary with query statistics
+        """
+        return self.vector_db.get_query_statistics()
     
     def search(self, query, structured_data=None, method="combined", top_k=5):
         """
