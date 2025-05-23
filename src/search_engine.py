@@ -229,11 +229,32 @@ class SearchEngine:
             semantic_results = self.semantic_search(query_text, top_k=top_k)
             results.extend([(img_id, score, "semantic") for img_id, score in semantic_results])
         
-        # Deduplicate results, prioritizing higher scores
-        unique_results = {}
-        for img_id, score, method_name in results:
-            if img_id not in unique_results or score > unique_results[img_id][0]:
-                unique_results[img_id] = (score, method_name)
+        # For combined search, use weighted average when an image appears in both methods
+        if method == "combined":
+            # Group results by image ID
+            grouped_results = {}
+            for img_id, score, method_name in results:
+                if img_id not in grouped_results:
+                    grouped_results[img_id] = {}
+                grouped_results[img_id][method_name] = score
+            
+            # Calculate weighted average for images found by both methods
+            unique_results = {}
+            for img_id, scores in grouped_results.items():
+                if "keyword" in scores and "semantic" in scores:
+                    # Use weighted average: 30% keyword, 70% semantic
+                    weighted_score = 0.3 * scores["keyword"] + 0.7 * scores["semantic"]
+                    unique_results[img_id] = (weighted_score, "combined")
+                elif "semantic" in scores:
+                    unique_results[img_id] = (scores["semantic"], "semantic")
+                else:
+                    unique_results[img_id] = (scores["keyword"], "keyword")
+        else:
+            # For single-method search, just take the highest score
+            unique_results = {}
+            for img_id, score, method_name in results:
+                if img_id not in unique_results or score > unique_results[img_id][0]:
+                    unique_results[img_id] = (score, method_name)
         
         # Convert to final output format
         final_results = [(img_id, score, method_name) for img_id, (score, method_name) in unique_results.items()]
